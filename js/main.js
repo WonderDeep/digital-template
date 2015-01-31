@@ -16,13 +16,29 @@ var game = new Phaser.Game(800, 600, Phaser.CANVAS, 'game', { preload: preload, 
 
 function preload() {
 
+//  Tilemaps are split into two parts: The actual map data (usually stored in a CSV or JSON file) 
+    //  and the tileset/s used to render the map.
+
+    //  Here we'll load the tilemap data. The first parameter is a unique key for the map data.
+
+    //  The second is a URL to the JSON file the map data is stored in. This is actually optional, you can pass the JSON object as the 3rd
+    //  parameter if you already have it loaded (maybe via a 3rd party source or pre-generated). In which case pass 'null' as the URL and
+    //  the JSON object as the 3rd parameter.
+
+    //  The final one tells Phaser the foramt of the map data, in this case it's a JSON file exported from the Tiled map editor.
+    //  This could be Phaser.Tilemap.CSV too.
     game.load.tilemap('level1', 'assets/games/starstruck/level1.json', null, Phaser.Tilemap.TILED_JSON);
+    //  Next we load the tileset. This is just an image, loaded in via the normal way we load images:
     game.load.image('tiles-1', 'assets/games/starstruck/tiles-1.png');
+    
+    
     game.load.spritesheet('dude', 'assets/games/starstruck/dude.png', 32, 48);
     game.load.spritesheet('droid', 'assets/games/starstruck/droid.png', 32, 32);
     game.load.image('starSmall', 'assets/games/starstruck/star.png');
     game.load.image('starBig', 'assets/games/starstruck/star2.png');
-    game.load.image('background', 'assets/games/starstruck/background2.png');
+    //background from MysticalGateway.com -> http://www.mysticalgateway.com/horror-background6.html
+    game.load.image('background', 'assets/background.png');
+    game.load.audio('boden', ['assets/audio/bodenstaendig_2000_in_rock_4bit.mp3', 'assets/audio/bodenstaendig_2000_in_rock_4bit.ogg']);
 
 }
 
@@ -35,6 +51,7 @@ var jumpTimer = 0;
 var cursors;
 var jumpButton;
 var bg;
+var music;
 
 function create() {
 
@@ -44,6 +61,10 @@ function create() {
 
     bg = game.add.tileSprite(0, 0, 800, 600, 'background');
     bg.fixedToCamera = true;
+
+    music = game.add.audio('boden');
+
+    music.play();
 
     map = game.add.tilemap('level1');
 
@@ -136,6 +157,7 @@ function render () {
     // game.debug.text(game.time.physicsElapsed, 32, 32);
     // game.debug.body(player);
     // game.debug.bodyInfo(player, 16, 24);
+    //game.debug.soundInfo(music, 20, 32);
 
 }    
 //    var game = new Phaser.Game( 800, 600, Phaser.AUTO, 'game', { preload: preload, create: create, update: update } );
