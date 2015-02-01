@@ -12,6 +12,8 @@
     // All loading functions will typically all be found inside "preload()".
     
     "use strict";
+    
+    //game(width, height, format, name, {preload: functions})
 var game = new Phaser.Game(800, 600, Phaser.CANVAS, 'game', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
@@ -29,17 +31,23 @@ function preload() {
     //  This could be Phaser.Tilemap.CSV too.
     game.load.tilemap('level1', 'assets/games/starstruck/level1.json', null, Phaser.Tilemap.TILED_JSON);
     //  Next we load the tileset. This is just an image, loaded in via the normal way we load images:
-    game.load.image('tiles-1', 'assets/games/starstruck/tiles-1.png');
+    // these tiles were made using the original tiles-1 from starstruck as base
+    game.load.image('tiles-1', 'assets/tiles-1.png');
     
-    
-    game.load.spritesheet('dude', 'assets/games/starstruck/dude.png', 32, 48);
+    //cat sprite made using "dude" from starstruck as a base
+    //each frame in the sprite sheet is 32x48 with 9 frames total
+    //you can put 9 after 48 incase there are more than 9 frames but 
+    //	you only want 9 to be read.
+    game.load.spritesheet('cat', 'assets/cat.png', 32, 48);
+
+    //background mading using the background from starstruckas base
+    game.load.image('background', 'assets/background.png');
+    game.load.audio('boden', ['assets/audio/bodenstaendig_2000_in_rock_4bit.mp3', 'assets/audio/bodenstaendig_2000_in_rock_4bit.ogg']);
     game.load.spritesheet('droid', 'assets/games/starstruck/droid.png', 32, 32);
     game.load.image('starSmall', 'assets/games/starstruck/star.png');
     game.load.image('starBig', 'assets/games/starstruck/star2.png');
-    //background from MysticalGateway.com -> http://www.mysticalgateway.com/horror-background6.html
-    game.load.image('background', 'assets/background.png');
-    game.load.audio('boden', ['assets/audio/bodenstaendig_2000_in_rock_4bit.mp3', 'assets/audio/bodenstaendig_2000_in_rock_4bit.ogg']);
-
+    game.load.image('bullet', 'assets/games/invaders/bullet.png');
+    
 }
 
 var map;
@@ -52,24 +60,38 @@ var cursors;
 var jumpButton;
 var bg;
 var music;
+var bullets;
 
 function create() {
-
+	
+    //imports the game physics
     game.physics.startSystem(Phaser.Physics.ARCADE);
-
+    //sets the background color (behind the bg image)
     game.stage.backgroundColor = '#000000';
+    
+    
+        //  Our bullet group
+    bullets = game.add.group();
+    bullets.enableBody = true;
+    bullets.physicsBodyType = Phaser.Physics.ARCADE;
+    bullets.createMultiple(30, 'bullet');
+    bullets.setAll('anchor.x', 0.5);
+    bullets.setAll('anchor.y', 1);
+    bullets.setAll('outOfBoundsKill', true);
+    bullets.setAll('checkWorldBounds', true);
+    
 
+    //tiles in the background image and makes it static
     bg = game.add.tileSprite(0, 0, 800, 600, 'background');
     bg.fixedToCamera = true;
 
+    //imports and play the gamemusic
     music = game.add.audio('boden');
-
     music.play();
-
+    
+    //sets up the platformmap for the player to navigate
     map = game.add.tilemap('level1');
-
     map.addTilesetImage('tiles-1');
-
     map.setCollisionByExclusion([ 13, 14, 15, 16, 46, 47, 48, 49, 50, 51 ]);
 
     layer = map.createLayer('Tile Layer 1');
@@ -77,25 +99,32 @@ function create() {
     //  Un-comment this on to see the collision tiles
     // layer.debug = true;
 
+    //reproportions things so that they all fit within the map
     layer.resizeWorld();
 
+    //gravity is imported
     game.physics.arcade.gravity.y = 250;
 
-    player = game.add.sprite(32, 32, 'dude');
+    //imports the player's sprite
+    player = game.add.sprite(32, 32, 'cat');
+    //tells the physics to effect the player
     game.physics.enable(player, Phaser.Physics.ARCADE);
 
     player.body.bounce.y = 0.2;
     player.body.collideWorldBounds = true;
     player.body.setSize(20, 32, 5, 16);
 
+    //sets up an animation
+    // (title, frame(s), frames per second (speed), loop=true)
     player.animations.add('left', [0, 1, 2, 3], 10, true);
     player.animations.add('turn', [4], 20, true);
     player.animations.add('right', [5, 6, 7, 8], 10, true);
 
+    //tells thecamera to follow the player
     game.camera.follow(player);
 
     cursors = game.input.keyboard.createCursorKeys();
-    jumpButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+    fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
 
 }
 
@@ -105,6 +134,13 @@ function update() {
 
     player.body.velocity.x = 0;
 
+     //  Firing?
+     if (fireButton.isDown)
+     {
+          fireBullet();
+     }
+        
+    //moves and animates the player moving left
     if (cursors.left.isDown)
     {
         player.body.velocity.x = -150;
@@ -115,6 +151,8 @@ function update() {
             facing = 'left';
         }
     }
+    
+    //moves and animates the playermoving right
     else if (cursors.right.isDown)
     {
         player.body.velocity.x = 150;
@@ -127,6 +165,7 @@ function update() {
     }
     else
     {
+    	//halts animation and stops movement when idle
         if (facing != 'idle')
         {
             player.animations.stop();
@@ -144,7 +183,8 @@ function update() {
         }
     }
     
-    if (jumpButton.isDown && player.body.onFloor() && game.time.now > jumpTimer)
+    //makes the sprite jump, but only if the player in touching the ground
+    if (cursors.up.isDown && player.body.onFloor() && game.time.now > jumpTimer)
     {
         player.body.velocity.y = -250;
         jumpTimer = game.time.now + 750;
