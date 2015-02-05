@@ -6,9 +6,11 @@ function preload() {
     game.load.tilemap('level1', 'assets/level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles-1', 'assets/tiles-1.png');
     game.load.spritesheet('cat', 'assets/cat.png', 32, 48);
-    game.load.spritesheet('ghost', 'assets/droid.png', 32, 32);
+    game.load.spritesheet('ghost', 'assets/ghost.png', 32, 32);
     game.load.image('background', 'assets/background2.jpg');
     game.load.image('bullet', 'assets/bullet.png');
+    game.load.image('portal', 'assets/Exit.png');
+    game.load.audio('music', 'assets/Rainy Summer.mp3');
 
 }
 
@@ -16,14 +18,18 @@ var map;
 var tileset;
 var layer;
 var player;
-var facing = 'left';
+var facing = 'right';
 var jumpTimer = 0;
 var cursors;
 var bg;
 var bullets;
 var nextFire = 0;
 var fireRate = 100;
-var ghosts;
+var spawnTimer = 0;
+var ghost;
+var stateText;
+var portal;
+var music;
 
 function create() {
 
@@ -36,12 +42,12 @@ function create() {
     map.addTilesetImage('tiles-1');
     map.setCollisionByExclusion([ 13, 14, 15, 16, 46, 47, 48, 49, 50, 51 ]);
     layer = map.createLayer('Tile Layer 1');
-    // Un-comment this on to see the collision tiles
-     //layer.debug = true;
+    //Un-comment this on to see the collision tiles
+    //layer.debug = true;
 
     layer.resizeWorld();   
     
-    // Our bullet group
+    //setting up the bullet group
     bullets = game.add.group();
     bullets.enableBody = true;
     bullets.physicsBodyType = Phaser.Physics.ARCADE;
@@ -50,16 +56,24 @@ function create() {
     bullets.setAll('anchor.y', 1);
     bullets.setAll('outOfBoundsKill', true);
     bullets.setAll('checkWorldBounds', true);
+    
+    music = game.add.audio('music');
+    music.play();
 
-    //  The baddies!
+    //the enemies the player must face
     ghosts = game.add.group();
     ghosts.enableBody = true;
     ghosts.physicsBodyType = Phaser.Physics.ARCADE;
- 
-    createGhosts(); 
+    ghosts.createMultiple(30, 'ghost');
+    ghosts.setAll('outOfBoundsKill', true);
+    ghosts.setAll('checkWorldBounds', true);
+    
+    //the goal or portal
+    portal = game.add.sprite(50,152, 'portal');
+    game.physics.enable(portal, Phaser.Physics.ARCADE);
     
     //the cat
-    player = game.add.sprite(32, 32, 'cat');
+    player = game.add.sprite(40, 935, 'cat');
     game.physics.enable(player, Phaser.Physics.ARCADE);
 
     player.body.bounce.y = 0.2;
@@ -83,25 +97,12 @@ function create() {
 
 }
 ////////////////////////////////////////////////////////////////////////////////
-function createGhosts () { 
-
-    var ghost = ghosts.create(20, 20, 'ghost');
-    //game.physics.arcade.moveToObject(ghost, player, 120);
-
-}
 ////////////////////////////////////////////////////////////////////////////////
 function update() {
 
     game.physics.arcade.collide(player, layer);
-    game.physics.arcade.collide(bullets, layer);
 
     player.body.velocity.x = 0;
-    
-    if(bullet.body.velocity.x == 0 && bullet.body.velocity.y == 0)
-    {
-    	    bullet.kill();
-    }
-   // ghosts.forEachAlive(moveGhost, this);
 
     if (game.input.activePointer.isDown)
     {
@@ -151,6 +152,15 @@ function update() {
         }
     }
     
+    if (game.time.now > spawnTimer)
+    {
+         ghost = ghosts.getFirstExists(false);
+         ghost.reset(988, game.rnd.integerInRange(100,800), 'ghost');
+         game.physics.arcade.moveToObject(ghost,player,120);
+         //ghosts.forEachAlive(moveGhost, this);
+         spawnTimer = game.time.now + 2000;
+    }
+    
     //makes the sprite jump, but only if the player in touching the ground
     if (this.wasd.up.isDown && player.body.onFloor() && game.time.now > jumpTimer)
     {
@@ -159,12 +169,15 @@ function update() {
     }
     
     //collision handling
-//    game.physics.arcade.overlap(bullets, aliens, collisionHandler, null, this);
+    game.physics.arcade.overlap(bullets, ghosts, collisionHandler, null, this);
+    game.physics.arcade.overlap(bullets, layer, killBullet, null, this);
+    game.physics.arcade.overlap(player, portal, winning, null, this);
+    game.physics.arcade.overlap(ghosts, player, catCaught, null, this);
 
 }
-/*
+
 function moveGhost (ghosts) { 
-     accelerateToObject(ghosts,player,30);  //start accelerateToObject on every bullet
+     accelerateToObject(ghosts,player,30);  //start accelerateToObject on every ghost
 }
 
 function accelerateToObject(obj1, obj2, speed) {
@@ -173,8 +186,9 @@ function accelerateToObject(obj1, obj2, speed) {
     obj1.body.rotation = angle + game.math.degToRad(90);  // correct angle of angry bullets (depends on the sprite used)
     obj1.body.force.x = Math.cos(angle) * speed;    // accelerateToObject 
     obj1.body.force.y = Math.sin(angle) * speed;
-}*/
+}
 
+//enables the player to fire bullets towards the mouse's location
 function fire() {
 
     if (game.time.now > nextFire && bullets.countDead() > 0)
@@ -193,15 +207,54 @@ function render () {
 
     // game.debug.text(game.time.physicsElapsed, 32, 32);
     // game.debug.body(player);
-    // game.debug.bodyInfo(player, 16, 24);
+     //game.debug.bodyInfo(player, 16, 24);
 
 }
-/*
+
+//you lose
+function catCaught (player, ghost)
+{
+	player.kill();
+	ghosts.callAll('kill');
+
+	        //Text
+	stateText = game.add.text(player.x,player.y,' ', { font: '20px Arial', fill: '#fff' });
+        stateText.anchor.setTo(0.5, 0.5);
+	stateText.text=" You were Caught! \n Click to try again.";
+        stateText.visible = true;
+
+        //the "click to restart" handler
+        game.input.onTap.addOnce(restart,this);
+}
+//you win
+function winning (player, portal)
+{
+	player.kill();
+	
+	stateText = game.add.text(player.x+100,player.y,' ', { font: '20px Arial', fill: '#fff' });
+        stateText.anchor.setTo(0.5, 0.5);
+	stateText.text="You made it to the portal! \n Who's on the other side I wonder? \n To Be Continued. \n Click to play again!";
+        stateText.visible = true;
+}
+
+//if a bullet hits the platforms, it's stopped
+function killBullet (bullet, layer)
+{
+	bullet.kill();
+}
+
+//if a bullet hits a ghost, both die
 function collisionHandler (bullet, ghost) {
 
     //  When a bullet hits an alien we kill them both
     bullet.kill();
     ghost.kill();
 
-}*/
+}
+
+function restart ()
+{
+	player.reset(40, 935);
+	stateText.visible = false;
+}
 
