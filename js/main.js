@@ -1,53 +1,15 @@
-//window.onload = function() {
-    // You might want to start with a template that uses GameStates:
-    //     https://github.com/photonstorm/phaser/tree/master/resources/Project%20Templates/Basic
-    
-    // You can copy-and-paste the code from any of the examples at http://examples.phaser.io here.
-    // You will need to change the fourth parameter to "new Phaser.Game()" from
-    // 'phaser-example' to 'game', which is the id of the HTML element where we
-    // want the game to go.
-    // The assets (and code) can be found at: https://github.com/photonstorm/phaser/tree/master/examples/assets
-    // You will need to change the paths you pass to "game.load.image()" or any other
-    // loading functions to reflect where you are putting the assets.
-    // All loading functions will typically all be found inside "preload()".
-    
-    "use strict";
-    
-    //game(width, height, format, name, {preload: functions})
+//creates the playing screen
 var game = new Phaser.Game(800, 600, Phaser.CANVAS, 'game', { preload: preload, create: create, update: update, render: render });
 
 function preload() {
 
-//  Tilemaps are split into two parts: The actual map data (usually stored in a CSV or JSON file) 
-    //  and the tileset/s used to render the map.
-
-    //  Here we'll load the tilemap data. The first parameter is a unique key for the map data.
-
-    //  The second is a URL to the JSON file the map data is stored in. This is actually optional, you can pass the JSON object as the 3rd
-    //  parameter if you already have it loaded (maybe via a 3rd party source or pre-generated). In which case pass 'null' as the URL and
-    //  the JSON object as the 3rd parameter.
-
-    //  The final one tells Phaser the foramt of the map data, in this case it's a JSON file exported from the Tiled map editor.
-    //  This could be Phaser.Tilemap.CSV too.
-    game.load.tilemap('level1', 'assets/games/starstruck/level1.json', null, Phaser.Tilemap.TILED_JSON);
-    //  Next we load the tileset. This is just an image, loaded in via the normal way we load images:
-    // these tiles were made using the original tiles-1 from starstruck as base
+    game.load.tilemap('level1', 'assets/level1.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles-1', 'assets/tiles-1.png');
-    
-    //cat sprite made using "dude" from starstruck as a base
-    //each frame in the sprite sheet is 32x48 with 9 frames total
-    //you can put 9 after 48 incase there are more than 9 frames but 
-    //	you only want 9 to be read.
     game.load.spritesheet('cat', 'assets/cat.png', 32, 48);
+    game.load.spritesheet('ghost', 'assets/droid.png', 32, 32);
+    game.load.image('background', 'assets/background2.jpg');
+    game.load.image('bullet', 'assets/bullet.png');
 
-    //background mading using the background from starstruckas base
-    game.load.image('background', 'assets/background.png');
-    game.load.audio('boden', ['assets/audio/bodenstaendig_2000_in_rock_4bit.mp3', 'assets/audio/bodenstaendig_2000_in_rock_4bit.ogg']);
-    game.load.spritesheet('droid', 'assets/games/starstruck/droid.png', 32, 32);
-    game.load.image('starSmall', 'assets/games/starstruck/star.png');
-    game.load.image('starBig', 'assets/games/starstruck/star2.png');
-    game.load.image('bullet', 'assets/games/invaders/bullet.png');
-    
 }
 
 var map;
@@ -57,20 +19,29 @@ var player;
 var facing = 'left';
 var jumpTimer = 0;
 var cursors;
-var jumpButton;
 var bg;
-var music;
 var bullets;
+var nextFire = 0;
+var fireRate = 100;
+var ghosts;
 
 function create() {
-	
-    //imports the game physics
+
     game.physics.startSystem(Phaser.Physics.ARCADE);
-    //sets the background color (behind the bg image)
-    game.stage.backgroundColor = '#000000';
+
+    bg = game.add.tileSprite(0, 0, 800, 600, 'background');
+    bg.fixedToCamera = true;
+
+    map = game.add.tilemap('level1');
+    map.addTilesetImage('tiles-1');
+    map.setCollisionByExclusion([ 13, 14, 15, 16, 46, 47, 48, 49, 50, 51 ]);
+    layer = map.createLayer('Tile Layer 1');
+    // Un-comment this on to see the collision tiles
+     //layer.debug = true;
+
+    layer.resizeWorld();   
     
-    
-        //  Our bullet group
+    // Our bullet group
     bullets = game.add.group();
     bullets.enableBody = true;
     bullets.physicsBodyType = Phaser.Physics.ARCADE;
@@ -79,69 +50,66 @@ function create() {
     bullets.setAll('anchor.y', 1);
     bullets.setAll('outOfBoundsKill', true);
     bullets.setAll('checkWorldBounds', true);
+
+    //  The baddies!
+    ghosts = game.add.group();
+    ghosts.enableBody = true;
+    ghosts.physicsBodyType = Phaser.Physics.ARCADE;
+ 
+    createGhosts(); 
     
-
-    //tiles in the background image and makes it static
-    bg = game.add.tileSprite(0, 0, 800, 600, 'background');
-    bg.fixedToCamera = true;
-
-    //imports and play the gamemusic
-    music = game.add.audio('boden');
-    music.play();
-    
-    //sets up the platformmap for the player to navigate
-    map = game.add.tilemap('level1');
-    map.addTilesetImage('tiles-1');
-    map.setCollisionByExclusion([ 13, 14, 15, 16, 46, 47, 48, 49, 50, 51 ]);
-
-    layer = map.createLayer('Tile Layer 1');
-
-    //  Un-comment this on to see the collision tiles
-    // layer.debug = true;
-
-    //reproportions things so that they all fit within the map
-    layer.resizeWorld();
-
-    //gravity is imported
-    game.physics.arcade.gravity.y = 250;
-
-    //imports the player's sprite
+    //the cat
     player = game.add.sprite(32, 32, 'cat');
-    //tells the physics to effect the player
     game.physics.enable(player, Phaser.Physics.ARCADE);
 
     player.body.bounce.y = 0.2;
+    player.body.gravity.y = 250;
     player.body.collideWorldBounds = true;
     player.body.setSize(20, 32, 5, 16);
 
-    //sets up an animation
-    // (title, frame(s), frames per second (speed), loop=true)
     player.animations.add('left', [0, 1, 2, 3], 10, true);
     player.animations.add('turn', [4], 20, true);
     player.animations.add('right', [5, 6, 7, 8], 10, true);
 
-    //tells thecamera to follow the player
     game.camera.follow(player);
 
     cursors = game.input.keyboard.createCursorKeys();
-    fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+    this.wasd = {
+                up: game.input.keyboard.addKey(Phaser.Keyboard.W),
+                down: game.input.keyboard.addKey(Phaser.Keyboard.S),
+                left: game.input.keyboard.addKey(Phaser.Keyboard.A),
+                right: game.input.keyboard.addKey(Phaser.Keyboard.D),
+            };
 
 }
+////////////////////////////////////////////////////////////////////////////////
+function createGhosts () { 
 
+    var ghost = ghosts.create(20, 20, 'ghost');
+    //game.physics.arcade.moveToObject(ghost, player, 120);
+
+}
+////////////////////////////////////////////////////////////////////////////////
 function update() {
 
     game.physics.arcade.collide(player, layer);
+    game.physics.arcade.collide(bullets, layer);
 
     player.body.velocity.x = 0;
+    
+    if(bullet.body.velocity.x == 0 && bullet.body.velocity.y == 0)
+    {
+    	    bullet.kill();
+    }
+   // ghosts.forEachAlive(moveGhost, this);
 
-     //  Firing?
-     if (fireButton.isDown)
-     {
-          fireBullet();
-     }
+    if (game.input.activePointer.isDown)
+    {
+        fire();
+    } 
         
     //moves and animates the player moving left
-    if (cursors.left.isDown)
+    if (this.wasd.left.isDown)
     {
         player.body.velocity.x = -150;
 
@@ -153,7 +121,7 @@ function update() {
     }
     
     //moves and animates the playermoving right
-    else if (cursors.right.isDown)
+    else if (this.wasd.right.isDown)
     {
         player.body.velocity.x = 150;
 
@@ -184,56 +152,56 @@ function update() {
     }
     
     //makes the sprite jump, but only if the player in touching the ground
-    if (cursors.up.isDown && player.body.onFloor() && game.time.now > jumpTimer)
+    if (this.wasd.up.isDown && player.body.onFloor() && game.time.now > jumpTimer)
     {
         player.body.velocity.y = -250;
         jumpTimer = game.time.now + 750;
     }
+    
+    //collision handling
+//    game.physics.arcade.overlap(bullets, aliens, collisionHandler, null, this);
 
 }
+/*
+function moveGhost (ghosts) { 
+     accelerateToObject(ghosts,player,30);  //start accelerateToObject on every bullet
+}
 
+function accelerateToObject(obj1, obj2, speed) {
+    if (typeof speed === 'undefined') { speed = 60; }
+    var angle = Math.atan2(obj2.y - obj1.y, obj2.x - obj1.x);
+    obj1.body.rotation = angle + game.math.degToRad(90);  // correct angle of angry bullets (depends on the sprite used)
+    obj1.body.force.x = Math.cos(angle) * speed;    // accelerateToObject 
+    obj1.body.force.y = Math.sin(angle) * speed;
+}*/
+
+function fire() {
+
+    if (game.time.now > nextFire && bullets.countDead() > 0)
+    {
+        nextFire = game.time.now + fireRate;
+
+        var bullet = bullets.getFirstDead();
+        //where to spawn the bullet
+        bullet.reset(player.x+24, player.y+32);
+
+        game.physics.arcade.moveToPointer(bullet, 300);
+    }
+
+} 
 function render () {
 
     // game.debug.text(game.time.physicsElapsed, 32, 32);
     // game.debug.body(player);
     // game.debug.bodyInfo(player, 16, 24);
-    //game.debug.soundInfo(music, 20, 32);
 
-}    
-//    var game = new Phaser.Game( 800, 600, Phaser.AUTO, 'game', { preload: preload, create: create, update: update } );
-    
-//    function preload() {
-        // Load an image and call it 'logo'.
-//        game.load.image( 'logo', 'assets/phaser.png' );
-//    }
-    
-//    var bouncy;
-    
-//    function create() {
-        // Create a sprite at the center of the screen using the 'logo' image.
-//        bouncy = game.add.sprite( game.world.centerX, game.world.centerY, 'logo' );
-        // Anchor the sprite at its center, as opposed to its top-left corner.
-        // so it will be truly centered.
-//        bouncy.anchor.setTo( 0.5, 0.5 );
-        
-        // Turn on the arcade physics engine for this sprite.
-//        game.physics.enable( bouncy, Phaser.Physics.ARCADE );
-        // Make it bounce off of the world bounds.
-//        bouncy.body.collideWorldBounds = true;
-        
-        // Add some text using a CSS style.
-        // Center it in X, and position its top 15 pixels from the top of the world.
-//        var style = { font: "25px Verdana", fill: "#9999ff", align: "center" };
-//        var text = game.add.text( game.world.centerX, 15, "Build something awesome.", style );
-//        text.anchor.setTo( 0.5, 0.0 );
-//    }
-    
-//    function update() {
-        // Accelerate the 'logo' sprite towards the cursor,
-        // accelerating at 500 pixels/second and moving no faster than 500 pixels/second
-        // in X or Y.
-        // This function returns the rotation angle that makes it visually match its
-        // new trajectory.
-//        bouncy.rotation = game.physics.arcade.accelerateToPointer( bouncy, this.game.input.activePointer, 500, 500, 500 );
-//    }
-//};
+}
+/*
+function collisionHandler (bullet, ghost) {
+
+    //  When a bullet hits an alien we kill them both
+    bullet.kill();
+    ghost.kill();
+
+}*/
+
