@@ -233,7 +233,7 @@ function winning (player, portal)
 	
 	stateText = game.add.text(player.x+100,player.y,' ', { font: '20px Arial', fill: '#fff' });
         stateText.anchor.setTo(0.5, 0.5);
-	stateText.text="You made it to the portal! \n Who's on the other side I wonder? \n To Be Continued. \n Click to play again!";
+	stateText.text="You made it to the portal! \n Who is on the other side I wonder? \n To Be Continued. \n Click to play again!";
         stateText.visible = true;
 }
 
